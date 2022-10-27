@@ -1,0 +1,27 @@
+name: Regularly task notification
+
+on:
+  schedule:
+    - cron: '0 3 * * *' # 日本時間で12時
+
+env:
+  NOTION_AUTH_KEY: ${{secrets.NOTION_AUTH_KEY}}
+  NOTION_DATABASE_ID: ${{secrets.NOTION_DATABASE_ID}}
+  SLACK_API_TOKEN: ${{secrets.SLACK_API_TOKEN}}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Setup Nodejs
+        uses: actions/setup-node@v1
+        with:
+          node-version: 18
+
+      - name: Send to slack
+        run: |
+          npm install
+          npm run start
