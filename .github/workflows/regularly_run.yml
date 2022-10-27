@@ -1,8 +1,9 @@
 name: Regularly task notification
 
 on:
-  schedule:
+  - schedule:
     - cron: '0 6 * * *' # 日本時間で15時
+  - workflow_dispatch:
 
 env:
   NOTION_AUTH_KEY: ${{secrets.NOTION_AUTH_KEY}}
