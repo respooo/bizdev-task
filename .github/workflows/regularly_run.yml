@@ -2,7 +2,7 @@ name: Regularly task notification
 
 on:
   schedule:
-    - cron: '0 3 * * *' # 日本時間で12時
+    - cron: '0 6 * * *' # 日本時間で15時
 
 env:
   NOTION_AUTH_KEY: ${{secrets.NOTION_AUTH_KEY}}
