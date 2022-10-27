@@ -1,19 +1,19 @@
-const { Client } = require('@notionhq/client');
 const Dotenv = require('dotenv');
-const { WebClient } = require('@slack/web-api');
+const { NotionClient } = require('./clients/NotionClient');
+const { SlackClient } = require('./clients/SlackClient');
+
+Dotenv.config();
+
+const notionClient = new NotionClient(process.env.NOTION_AUTH_KEY);
+const slackClient = new SlackClient(process.env.SLACK_API_TOKEN);
 
 const main = async () => {
-    Dotenv.config();
-
     // Get today limit tasks from notion
-    const notion = new Client({
-        auth: process.env.NOTION_AUTH_KEY,
-    });
-    const res = await notion.databases.query({ database_id: process.env.NOTION_DATABASE_ID });
+    const allTasks = await notionClient.getAllTasks(process.env.NOTION_DATABASE_ID);
     const now = new Date();
     const todayKey = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
-    const todayTasks = res.results.filter((result) => result.properties['期限'].date?.start === todayKey);
-    const expiredTasks = res.results.filter((result) => {
+    const todayTasks = allTasks.filter((result) => result.properties['期限'].date?.start === todayKey);
+    const expiredTasks = allTasks.filter((result) => {
         const expire = result.properties['期限'].date?.start;
         if (!expire) return false;
         const splitted = expire.split('-');
@@ -24,16 +24,34 @@ const main = async () => {
         return expireDate < today && !isDone;
     });
 
+    const slackMembers = await slackClient.getUsers();
+
+    const todayTasksMessages = await Promise.all(todayTasks.map((todayTask) => convertTaskToSlackText(todayTask, slackMembers)));
+    const expiredTasksMessages = await Promise.all(expiredTasks.map((expiredTask) => convertTaskToSlackText(expiredTask, slackMembers)));
+
     // Send message to slack
-    const slackClient = new WebClient(process.env.SLACK_API_TOKEN);
-    await slackClient.chat.postMessage({
-        channel: '#biz-all',
-        text:
-            `📍今日締め切りのタスクがあります！\n` +
-            todayTasks.map((todayTask) => `<${todayTask.url}|${todayTask.properties['名前'].title[0]?.plain_text ?? "タスク"}>`).join('\n') + '\n\n' +
-            `🚨↓のタスクは期限が過ぎています！\n` +
-            expiredTasks.map((expiredTask) => `<${expiredTask.url}|${expiredTask.properties['名前'].title[0]?.plain_text ?? "タスク"}> ~${expiredTask.properties['期限'].date?.start}`).join('\n')
-    });
+    await slackClient.postMessage(
+        '#biz-all',
+        `📍今日締め切りのタスクがあります！\n` +
+        todayTasksMessages.join('\n') + '\n\n' +
+        `🚨↓のタスクは期限が過ぎています！\n` +
+        expiredTasksMessages.join('\n')
+    );
+}
+
+const convertTaskToSlackText = async (task, slackMembers) => {
+    const taskMembers = task.properties['Member'].relation;
+    const taskMemberEmails = await Promise.all(taskMembers.map(async (taskMember) => {
+        const page = await notionClient.getPage(taskMember.id);
+        return page.properties['email'].email
+    }));
+    const slackMemberIds = taskMemberEmails.map((taskMemberEmail) => {
+        const slackMember = slackMembers.find((member) => member.profile.email === taskMemberEmail);
+        if (!slackMember) return null;
+        return slackMember.id;
+    }).filter((v) => v !== null);
+    return `<${task.url}|${task.properties['名前'].title[0]?.plain_text ?? "タスク"}> ` +
+        slackMemberIds.map((slackMemberId) => `<@${slackMemberId}>`).join(' , ');
 }
 
 main();
