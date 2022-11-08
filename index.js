@@ -11,7 +11,7 @@ const main = async () => {
     // Get today limit tasks from notion
     const allTasks = await notionClient.getAllTasks(process.env.NOTION_DATABASE_ID);
     const now = new Date();
-    const todayKey = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
+    const todayKey = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`;
     const todayTasks = allTasks.filter((result) => result.properties['期限'].date?.start === todayKey);
     const expiredTasks = allTasks.filter((result) => {
         const expire = result.properties['期限'].date?.start;
