@@ -13,8 +13,8 @@ class NotionClient {
         return res.results;
     }
 
-    async getPage(pageId) {
-        const res = await this.notion.pages.retrieve({page_id: pageId});
+    async getUser(userId) {
+        const res = await this.notion.users.retrieve({ user_id: userId });
         return res;
     }
 }
