@@ -18,7 +18,7 @@ const main = async () => {
     const todayKey = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`;
 
     // 期日が本日でステータスが完了でないタスク
-    const todayTasks = hasEndDateTasks.filter((task) => task.properties['期日'].date.end.includes(todayKey) && task.properties['ステータス'].status.name !== '🎉完了');
+    const todayTasks = hasEndDateTasks.filter((task) => task.properties['期日'].date.end.includes(todayKey) && !task.properties['ステータス'].status.name.includes('完了'));
 
     // 期日が本日以前でステータスが完了でないタスク
     const expiredTasks = hasEndDateTasks.filter((task) => {
@@ -28,7 +28,7 @@ const main = async () => {
         const expireDate = new Date(splitted[0], Number(splitted[1]) - 1, splitted[2]);
         const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-        const isDone = task.properties['ステータス'].status.name === '🎉完了';
+        const isDone = task.properties['ステータス'].status.name.includes('完了');
         return expireDate < today && !isDone;
     });
 
