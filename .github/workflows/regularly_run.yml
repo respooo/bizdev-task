@@ -4,7 +4,6 @@ on:
   schedule:
     - cron: '30 10 * * *' # 日本時間で19時半
     - cron: '0 0 * * *' # 日本時間で9時
-  workflow_dispatch:
 
 env:
   NOTION_AUTH_KEY: ${{secrets.NOTION_AUTH_KEY}}
