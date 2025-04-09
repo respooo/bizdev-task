@@ -40,10 +40,10 @@ const main = async () => {
     // Send message to slack
     await slackClient.postMessage(
         '#biz-all',
-        `📍今日締め切りのタスク: ${todayTasksMessages.length === 0 ? 'ありません！お疲れ様でした！🎉' : `${todayTasksMessages.length}件`}\n` +
-        todayTasksMessages.join('\n') + '\n\n' +
-        `🚨期限がすぎているタスク: ${expiredTasks.length}件\n` +
-        expiredTasksMessages.join('\n')
+        `📍今日締め切りのタスク\n` +
+        (todayTasks.length > 0 ? todayTasksMessages.join('\n') : 'ありません！お疲れ様でした！🎉') + '\n\n' +
+        `🚨期限がすぎているタスク\n` +
+        (expiredTasks.length > 0 ? expiredTasksMessages.join('\n') : 'ありません！お疲れ様でした！🎉'),
     );
 }
 
