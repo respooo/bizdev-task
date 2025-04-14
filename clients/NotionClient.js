@@ -9,8 +9,13 @@ class NotionClient {
     }
 
     async getAllTasks(databaseId) {
-        const res = await this.notion.databases.query({database_id: databaseId});
+        const res = await this.notion.databases.query({ database_id: databaseId });
         return res.results;
+    }
+
+    async getPage(pageId) {
+        const res = await this.notion.pages.retrieve({ page_id: pageId });
+        return res;
     }
 
     async getUser(userId) {
