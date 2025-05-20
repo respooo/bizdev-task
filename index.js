@@ -9,50 +9,53 @@ const slackClient = new SlackClient(process.env.SLACK_API_TOKEN);
 
 const main = async () => {
     const allTasks = await notionClient.getAllTasks(process.env.NOTION_DATABASE_ID);
-
     const previousRunTimestamp = getPreviousRunTimestamp();
-    const newlyCreatedTasks = allTasks.filter((task) => task.created_time > previousRunTimestamp && !isDoneOrStoppingTask(task));
-
-    const noEndDateTasks = allTasks.filter((task) => !task.properties['期日'].date && !isDoneOrStoppingTask(task));
-
-    // 本日締め切りのタスク、締め切りが過ぎているタスクは期日が存在するタスクのみ扱う
-    const hasEndDateTasks = allTasks.filter((task) => task.properties['期日'].date?.end)
-    
-    // 2000-01-01の形で本日の日付のkeyを取得
+    const todayKey = getTodayKey();
     const now = new Date();
-    const todayKey = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`;
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-    // 期日が本日でステータスが完了でないタスク
-    const todayTasks = hasEndDateTasks.filter((task) => task.properties['期日'].date.end.includes(todayKey) && !isDoneOrStoppingTask(task));
+    const newlyCreatedTasks = filterTasks(allTasks, task =>
+        task.created_time > previousRunTimestamp && !isDoneOrStoppingTask(task)
+    );
 
-    // 期日が本日以前でステータスが完了でないタスク
-    const expiredTasks = hasEndDateTasks.filter((task) => {
-        const expire = task.properties['期日'].date.end;
-        if (!expire) return false;
-        const splitted = expire.split('-');
-        const expireDate = new Date(splitted[0], Number(splitted[1]) - 1, splitted[2]);
-        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const noEndDateTasks = filterTasks(allTasks, task =>
+        !task.properties['期日'].date && !isDoneOrStoppingTask(task)
+    );
 
-        return expireDate < today && !isDoneOrStoppingTask(task);
-    });
+    const hasEndDateTasks = filterTasks(allTasks, task =>
+        task.properties['期日'].date?.end
+    );
+
+    const todayTasks = filterTasks(hasEndDateTasks, task =>
+        isDueToday(task, todayKey)
+    );
+
+    const expiredTasks = filterTasks(hasEndDateTasks, task =>
+        isExpired(task, today)
+    );
 
     const slackMembers = await slackClient.getUsers();
 
-    const todayTasksMessages = await Promise.all(todayTasks.map((todayTask) => convertTaskToSlackText(todayTask, slackMembers)));
-    const expiredTasksMessages = await Promise.all(expiredTasks.map((expiredTask) => convertTaskToSlackText(expiredTask, slackMembers)));
-    const newlyCreatedTaskMessages = await Promise.all(newlyCreatedTasks.map((newlyCreatedTask) => convertTaskToSlackText(newlyCreatedTask, slackMembers)));
-    const noEndDateTaskMessages = await Promise.all(noEndDateTasks.map((noEndDateTask) => convertTaskToSlackText(noEndDateTask, slackMembers)));
+    const [
+        todayTasksMessages,
+        expiredTasksMessages,
+        newlyCreatedTaskMessages,
+        noEndDateTaskMessages
+    ] = await Promise.all([
+        createSlackMessages(todayTasks, slackMembers),
+        createSlackMessages(expiredTasks, slackMembers),
+        createSlackMessages(newlyCreatedTasks, slackMembers),
+        createSlackMessages(noEndDateTasks, slackMembers)
+    ]);
 
-    // Send message to slack
-    await slackClient.postMessage(
-        '#biz-all',
-        `📍今日締め切りのタスク\n` +
-        (todayTasks.length > 0 ? todayTasksMessages.join('\n') : 'ありません！お疲れ様でした！🎉') + '\n\n' +
-        `🚨期限がすぎているタスク\n` +
-        (expiredTasks.length > 0 ? expiredTasksMessages.join('\n') : 'ありません！お疲れ様でした！🎉') + 
-        (newlyCreatedTasks.length > 0 ? `\n\n🆕新たに追加されたタスク\n${newlyCreatedTaskMessages.join('\n')}` : '') +
-        (noEndDateTasks.length > 0 ? `\n\n❓期限が設定されていないタスク\n${noEndDateTaskMessages.join('\n')}` : ''),
-    );
+    const message = `📍今日締め切りのタスク\n` +
+         (todayTasksMessages.length > 0 ? todayTasksMessages.join('\n') : 'ありません！お疲れ様でした！🎉') + '\n\n' +
+         `🚨期限がすぎているタスク\n` +
+         (expiredTasksMessages.length > 0 ? expiredTasksMessages.join('\n') : 'ありません！お疲れ様でした！🎉') +
+         (newlyCreatedTaskMessages.length > 0 ? `\n\n🆕新たに追加されたタスク\n${newlyCreatedTaskMessages.join('\n')}` : '') +
+         (noEndDateTaskMessages.length > 0 ? `\n\n❓期限が設定されていないタスク\n${noEndDateTaskMessages.join('\n')}` : '');
+    
+    await slackClient.postMessage('#biz-all', message);
 }
 
 const convertTaskToSlackText = async (task, slackMembers) => {
@@ -104,5 +107,31 @@ const getPreviousRunTimestamp = () => {
   
     return target.toISOString();
   }
+
+// タスクのフィルタリングを共通化
+const filterTasks = (tasks, predicate) => tasks.filter(predicate);
+
+// 日付をYYYY-MM-DD形式で取得
+const getTodayKey = () => {
+    const now = new Date();
+    return `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`;
+};
+
+// 期日が本日かどうか判定
+const isDueToday = (task, todayKey) =>
+    task.properties['期日'].date?.end?.includes(todayKey) && !isDoneOrStoppingTask(task);
+
+// 期日が本日以前かどうか判定
+const isExpired = (task, today) => {
+    const expire = task.properties['期日'].date?.end;
+    if (!expire) return false;
+    const [y, m, d] = expire.split('-');
+    const expireDate = new Date(y, Number(m) - 1, d);
+    return expireDate < today && !isDoneOrStoppingTask(task);
+};
+
+// メッセージ生成の共通化
+const createSlackMessages = async (tasks, slackMembers) =>
+    Promise.all(tasks.map(task => convertTaskToSlackText(task, slackMembers)));
 
 main();
