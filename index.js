@@ -11,9 +11,9 @@ const main = async () => {
     const allTasks = await notionClient.getAllTasks(process.env.NOTION_DATABASE_ID);
 
     const previousRunTimestamp = getPreviousRunTimestamp();
-    const newlyCreatedTasks = allTasks.filter((task) => task.created_time > previousRunTimestamp && !isDoneTask(task));
+    const newlyCreatedTasks = allTasks.filter((task) => task.created_time > previousRunTimestamp && !isDoneOrStoppingTask(task));
 
-    const noEndDateTasks = allTasks.filter((task) => !task.properties['期日'].date && !isDoneTask(task));
+    const noEndDateTasks = allTasks.filter((task) => !task.properties['期日'].date && !isDoneOrStoppingTask(task));
 
     // 本日締め切りのタスク、締め切りが過ぎているタスクは期日が存在するタスクのみ扱う
     const hasEndDateTasks = allTasks.filter((task) => task.properties['期日'].date?.end)
@@ -23,7 +23,7 @@ const main = async () => {
     const todayKey = `${now.getFullYear()}-${(now.getMonth() + 1).toString().padStart(2, '0')}-${now.getDate().toString().padStart(2, '0')}`;
 
     // 期日が本日でステータスが完了でないタスク
-    const todayTasks = hasEndDateTasks.filter((task) => task.properties['期日'].date.end.includes(todayKey) && !isDoneTask(task));
+    const todayTasks = hasEndDateTasks.filter((task) => task.properties['期日'].date.end.includes(todayKey) && !isDoneOrStoppingTask(task));
 
     // 期日が本日以前でステータスが完了でないタスク
     const expiredTasks = hasEndDateTasks.filter((task) => {
@@ -33,7 +33,7 @@ const main = async () => {
         const expireDate = new Date(splitted[0], Number(splitted[1]) - 1, splitted[2]);
         const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
-        return expireDate < today && !isDoneTask(task);
+        return expireDate < today && !isDoneOrStoppingTask(task);
     });
 
     const slackMembers = await slackClient.getUsers();
@@ -76,8 +76,8 @@ const convertTaskToSlackText = async (task, slackMembers) => {
         slackMemberIds.map((slackMemberId) => `<@${slackMemberId}>`).join(' , ');
 }
 
-const isDoneTask = (task) => {
-    return task.properties['ステータス'].status.name.includes('完了');
+const isDoneOrStoppingTask = (task) => {
+    return task.properties['ステータス'].status.name.includes('完了') || task.properties['ステータス'].status.name.includes('一時停止');
 }
 
 // 前回実行時間を計算
